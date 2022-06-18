@@ -253,14 +253,14 @@ if __name__ == "__main__":
   en_corpus_len = len(en_word_2_index)
 
 
-  en_datas,ch_datas = get_datas(nums=None)
+  en_datas,ch_datas = get_datas(nums=2000) # 取语料库中的前2000条进行模型训练
   encoder_embedding_num = 50
   encoder_hidden_num = 100
   decoder_embedding_num = 107
   decoder_hidden_num = 100
 
-  batch_size = 2 
-  epoch = 40 # 每个样本参与训练次数
+  batch_size = 2
+  epoch = 100 # 每个样本参与训练次数
   lr = 0.001 # 学习率
 
   dataset = MyDataset(en_datas,ch_datas,en_word_2_index,ch_word_2_index)
