@@ -9,6 +9,19 @@ from torch.utils.data import Dataset,DataLoader
 import pickle
 
 def get_datas(file = "datas\\translate.csv",nums = None):
+  ''' Function: get_datas
+
+  读取中英文本语料库
+  data/translate.csv文件共两列, 一列英文, 一列中文. 每行中英文意思相同.
+
+  Parameters:
+    file: string - 语料库csv相对地址
+    nums: int - 语料库读取文本段个数
+  
+  Return: (List, List) - (英文文本段, 中文文本段)
+
+  '''
+
   all_datas = pd.read_csv(file)
   en_datas = list(all_datas["english"])
   ch_datas = list(all_datas["chinese"])
@@ -20,13 +33,37 @@ def get_datas(file = "datas\\translate.csv",nums = None):
 
 
 class MyDataset(Dataset):
+  ''' Class: MyDataSet
+
+  基于pytorch Dataset类构建数据集, 继承并重写了__getitem__(), __init__(), __len__()三个方法.
+
+
+  '''
   def __init__(self,en_data,ch_data,en_word_2_index,ch_word_2_index):
+    ''' Function: __init__
+    
+    初始化数据集
+
+    Parameters:
+      en_data: List[str] - 英文数据
+      ch_data: List[str] - 中文数据
+      en_word_2_index: List[int] - 英文字母对应index
+      ch_word_2_index: List[int] - 中文汉字对应index
+
+    '''
     self.en_data = en_data
     self.ch_data = ch_data
     self.en_word_2_index = en_word_2_index
     self.ch_word_2_index = ch_word_2_index
 
   def __getitem__(self,index):
+    ''' Function: __getitme__
+
+    返回数据集指定Index下, 根据通过的英文字母和汉字对应Index列表, 返回英文文段和对应的中文文段的向量.
+
+    Return: (List[int], List[int])
+    
+    '''
     en = self.en_data[index]
     ch = self.ch_data[index]
 
@@ -37,6 +74,17 @@ class MyDataset(Dataset):
 
 
   def batch_data_process(self,batch_datas):
+    ''' Function: batch_data_process
+    
+    替换掉pytorch下的Dataset里的默认填充方法collate_fn,
+    解决中英文文本对应向量长度不一致问题, 按照每个batch 最大的长度进行填充. 并添加开始标识符和结束标识符. 
+
+    Parameters:
+      batch_datas: List[Tuple(List[int], List[int])] - 一个batch下的所有文本的中英文向量
+
+    Returns: torch.Tensor - 返回字向量
+
+    '''
     global device
     en_index , ch_index = [],[]
     en_len , ch_len = [],[]
@@ -61,17 +109,43 @@ class MyDataset(Dataset):
 
 
   def __len__(self):
+    ''' Function: __len__
+    
+    返回数据集长度, 若中英文文本数据长度个数不一致抛出错误. 
+
+    '''
     assert len(self.en_data) == len(self.ch_data)
     return len(self.ch_data)
 
 
 class Encoder(nn.Module):
+  ''' Encoder
+  
+  基于pytorch.nn.Module构建编码器, 使用LSTM, 输入英文, 拿到输出的隐层
+  
+  '''
+  
   def __init__(self,encoder_embedding_num,encoder_hidden_num,en_corpus_len):
+
+    ''' Function: __init__
+
+    Parameters:
+      encoder_embedding_num: int - 嵌入(embedding)层数量
+      encoder_hidden_num: int - 隐层数量
+      en_corpus_len: int - 构成英文语料库字符的长度, 用于创建字向量.
+    
+    
+    '''
     super().__init__()
     self.embedding = nn.Embedding(en_corpus_len,encoder_embedding_num)
     self.lstm = nn.LSTM(encoder_embedding_num,encoder_hidden_num,batch_first=True)
 
   def forward(self,en_index):
+    ''' Function: forword
+    
+    输入英文文段向量, 根据LSTM 返回隐藏层编码
+
+    '''
     en_embedding = self.embedding(en_index)
     _,encoder_hidden =self.lstm(en_embedding)
 
@@ -80,6 +154,13 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
+  ''' Decoder
+  
+  基于pytorch.nn.Module构建解码器, 使用LSTM
+
+  Parmameters: 与Encoder相似
+
+  '''
   def __init__(self,decoder_embedding_num,decoder_hidden_num,ch_corpus_len):
     super().__init__()
     self.embedding = nn.Embedding(ch_corpus_len,decoder_embedding_num)
@@ -93,6 +174,11 @@ class Decoder(nn.Module):
 
 
 def translate(sentence):
+  ''' Function: translate 
+
+  根据训练好的模型ENCODER和DECODER翻译文本
+  
+  '''
   global en_word_2_index,model,device,ch_word_2_index,ch_index_2_word
   en_index = torch.tensor([[en_word_2_index[i] for i in sentence]],device=device)
 
@@ -118,6 +204,11 @@ def translate(sentence):
 
 
 class Seq2Seq(nn.Module):
+  '''Seq2Seq
+  
+  Seq2Seq模型由ENCODER和DECODER两个LSTM部分构成
+
+  '''
   def __init__(self,encoder_embedding_num,encoder_hidden_num,en_corpus_len,decoder_embedding_num,decoder_hidden_num,ch_corpus_len):
     super().__init__()
     self.encoder = Encoder(encoder_embedding_num,encoder_hidden_num,en_corpus_len)
@@ -162,15 +253,15 @@ if __name__ == "__main__":
   en_corpus_len = len(en_word_2_index)
 
 
-  en_datas,ch_datas = get_datas()
+  en_datas,ch_datas = get_datas(nums=None)
   encoder_embedding_num = 50
   encoder_hidden_num = 100
   decoder_embedding_num = 107
   decoder_hidden_num = 100
 
-  batch_size = 2
-  epoch = 40
-  lr = 0.001
+  batch_size = 2 
+  epoch = 40 # 每个样本参与训练次数
+  lr = 0.001 # 学习率
 
   dataset = MyDataset(en_datas,ch_datas,en_word_2_index,ch_word_2_index)
   dataloader = DataLoader(dataset,batch_size,shuffle=False,collate_fn = dataset.batch_data_process)
